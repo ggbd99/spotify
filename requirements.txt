@@ -3,3 +3,4 @@ requests==2.31.0
 spotipy==2.22.1
 gunicorn==20.1.0
 isodate>=0.6.1
+rapidfuzz>=3.0.0
