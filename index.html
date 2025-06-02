@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spotify Playlist</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; padding: 2rem; }
+    .track { margin-bottom: 1rem; padding: 0.5rem; background: #1e1e1e; border-radius: 5px; }
+    .track a { color: #1DB954; text-decoration: none; margin-left: 1rem; }
+    button { padding: 0.5rem 1rem; margin-bottom: 1rem; background: #1DB954; border: none; color: #fff; border-radius: 5px; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <h1>Spotify Playlist to YouTube</h1>
+  <button id="login-btn">Login with Spotify</button>
+  <p id="status">Please log in to load your playlist.</p>
+  <div id="track-list"></div>
+
+  <script>
+    const clientId = "c81af8af7bad47e89e0aba261d02e3df"; // 👈 Replace this
+    const redirectUri = window.location.href.split('#')[0];
+    const scopes = "playlist-read-private";
+
+    document.getElementById("login-btn").addEventListener("click", () => {
+      const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+      window.location.href = authUrl;
+    });
+
+    window.onload = async () => {
+      if (!window.location.hash.includes("access_token")) return;
+
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const token = params.get("access_token");
+      window.history.replaceState({}, document.title, redirectUri); // Clean up URL
+
+      const headers = { Authorization: `Bearer ${token}` };
+      const status = document.getElementById("status");
+      const trackList = document.getElementById("track-list");
+
+      try {
+        const playlistRes = await fetch("https://api.spotify.com/v1/me/playlists?limit=1", { headers });
+        const playlists = await playlistRes.json();
+        const playlist = playlists.items[0];
+
+        if (!playlist) {
+          status.textContent = "No playlists found.";
+          return;
+        }
+
+        const playlistId = playlist.id;
+        let allTracks = [];
+        let offset = 0;
+
+        while (true) {
+          const trackRes = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&offset=${offset}`, { headers });
+          const trackData = await trackRes.json();
+          const tracks = trackData.items.map(item => {
+            const name = item.track?.name;
+            const artists = item.track?.artists?.map(a => a.name).join(", ");
+            return { name, artists };
+          }).filter(t => t.name && t.artists);
+          allTracks.push(...tracks);
+          if (!trackData.next) break;
+          offset += 100;
+        }
+
+        status.textContent = `${allTracks.length} tracks loaded from: ${playlist.name}`;
+
+        allTracks.forEach(track => {
+          const div = document.createElement("div");
+          div.className = "track";
+          const query = encodeURIComponent(`${track.artists} ${track.name}`);
+          div.innerHTML = `<strong>${track.name}</strong> — ${track.artists} <a href="https://www.youtube.com/results?search_query=${query}" target="_blank">▶ YouTube</a>`;
+          trackList.appendChild(div);
+        });
+
+      } catch (err) {
+        status.textContent = "Error loading playlist: " + err.message;
+      }
+    };
+  </script>
+
+</body>
+</html>
